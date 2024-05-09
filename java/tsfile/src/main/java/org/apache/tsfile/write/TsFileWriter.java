@@ -533,6 +533,14 @@ public class TsFileWriter implements AutoCloseable {
     return checkMemorySizeAndMayFlushChunks();
   }
 
+  public boolean writeOutOfOrder(Tablet tablet) throws IOException, WriteProcessException {
+    // make sure the ChunkGroupWriter for this Tablet exist
+    checkIsTimeseriesExist(tablet, false);
+    // get corresponding ChunkGroupWriter and write this Tablet
+    recordCount += groupWriters.get(new PlainDeviceID(tablet.deviceId)).writeOutOfOrder(tablet);
+    return checkMemorySizeAndMayFlushChunks();
+  }
+
   /**
    * calculate total memory size occupied by all ChunkGroupWriter instances currently.
    *

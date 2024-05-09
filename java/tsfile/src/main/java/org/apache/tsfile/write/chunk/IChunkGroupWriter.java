@@ -52,6 +52,8 @@ public interface IChunkGroupWriter {
    */
   int write(Tablet tablet) throws WriteProcessException, IOException;
 
+  int writeOutOfOrder(Tablet tablet) throws WriteProcessException, IOException;
+
   /**
    * flushing method for serializing to local file system or HDFS. Implemented by
    * ChunkWriterImpl.writeToFileWriter().

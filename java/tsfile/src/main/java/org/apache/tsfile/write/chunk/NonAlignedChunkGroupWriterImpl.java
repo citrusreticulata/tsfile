@@ -138,6 +138,54 @@ public class NonAlignedChunkGroupWriterImpl implements IChunkGroupWriter {
   }
 
   @Override
+  public int writeOutOfOrder(Tablet tablet) throws WriteProcessException {
+    int maxPointCount = 0, pointCount;
+    List<MeasurementSchema> timeseries = tablet.getSchemas();
+    for (int column = 0; column < timeseries.size(); column++) {
+      String measurementId = timeseries.get(column).getMeasurementId();
+      TSDataType tsDataType = timeseries.get(column).getType();
+      pointCount = 0;
+      for (int row = 0; row < tablet.rowSize; row++) {
+        // check isNull in tablet
+        if (tablet.bitMaps != null
+            && tablet.bitMaps[column] != null
+            && tablet.bitMaps[column].isMarked(row)) {
+          continue;
+        }
+        long time = tablet.timestamps[row];
+        // checkIsHistoryData(measurementId, time);
+        pointCount++;
+        switch (tsDataType) {
+          case INT32:
+            chunkWriters.get(measurementId).write(time, ((int[]) tablet.values[column])[row]);
+            break;
+          case INT64:
+            chunkWriters.get(measurementId).write(time, ((long[]) tablet.values[column])[row]);
+            break;
+          case FLOAT:
+            chunkWriters.get(measurementId).write(time, ((float[]) tablet.values[column])[row]);
+            break;
+          case DOUBLE:
+            chunkWriters.get(measurementId).write(time, ((double[]) tablet.values[column])[row]);
+            break;
+          case BOOLEAN:
+            chunkWriters.get(measurementId).write(time, ((boolean[]) tablet.values[column])[row]);
+            break;
+          case TEXT:
+            chunkWriters.get(measurementId).write(time, ((Binary[]) tablet.values[column])[row]);
+            break;
+          default:
+            throw new UnSupportedDataTypeException(
+                String.format("Data type %s is not supported.", tsDataType));
+        }
+        lastTimeMap.put(measurementId, time);
+      }
+      maxPointCount = Math.max(pointCount, maxPointCount);
+    }
+    return maxPointCount;
+  }
+
+  @Override
   public long flushToFileWriter(TsFileIOWriter fileWriter) throws IOException {
     LOG.debug("start flush device id:{}", deviceId);
     // make sure all the pages have been compressed into buffers, so that we can get correct

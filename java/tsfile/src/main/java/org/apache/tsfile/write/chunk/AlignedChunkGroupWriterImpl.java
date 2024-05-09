@@ -215,6 +215,12 @@ public class AlignedChunkGroupWriterImpl implements IChunkGroupWriter {
   }
 
   @Override
+  public int writeOutOfOrder(Tablet tablet) throws WriteProcessException, IOException {
+    throw new WriteProcessException(
+        "Not supported. writeOutOfOrder in Aligned Chunk Group Writer Impl");
+  }
+
+  @Override
   public long flushToFileWriter(TsFileIOWriter tsfileWriter) throws IOException {
     LOG.debug("start flush device id:{}", deviceId);
     // make sure all the pages have been compressed into buffers, so that we can get correct
