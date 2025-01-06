@@ -97,20 +97,20 @@ fi
 echo "build using: build_type=$build_type"
 if [ ${build_type} == "Debug" ]
 then
-  mkdir -p build/Debug
-  cd build/Debug
+  mkdir -p build/aarch_Debug
+  cd build/aarch_Debug
 elif [ ${build_type} == "Release" ]
 then
-  mkdir -p build/Release
-  cd build/Release
+  mkdir -p build/aarch_Release
+  cd build/aarch_Release
 elif [ ${build_type} == "RelWithDebInfo" ]
 then
-  mkdir -p build/relwithdebinfo
-  cd build/relwithdebinfo
+  mkdir -p build/aarch_relwithdebinfo
+  cd build/aarch_relwithdebinfo
 elif [ ${build_type} == "MinSizeRel" ]
 then
-  mkdir -p build/minsizerel
-  cd build/minsizerel
+  mkdir -p build/aarch_minsizerel
+  cd build/aarch_minsizerel
 else
   echo ""
   echo "unknow build type: ${build_type}, valid build types(case intensive): Debug, Release, RelWithDebInfo, MinSizeRel"
@@ -127,11 +127,11 @@ cmake ../../                           \
   -DUSE_CPP11=$use_cpp11               \
   -DENABLE_COV=$enable_cov             \
   -DDEBUG_SE=$debug_se                 \
-  -DBUILD_TSFILE_ONLY=$build_tsfile_only
+  -DBUILD_TSFILE_ONLY=$build_tsfile_only  \
+  -DCMAKE_TOOLCHAIN_FILE=toolchain-aarch.cmake
 
 VERBOSE=1 make
-VERBOSE=1 make install
-
+# VERBOSE=1 make install
 
 
 

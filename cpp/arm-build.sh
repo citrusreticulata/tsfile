@@ -97,26 +97,42 @@ fi
 echo "build using: build_type=$build_type"
 if [ ${build_type} == "Debug" ]
 then
-  mkdir -p build/Debug
-  cd build/Debug
+  mkdir -p build/arm_Debug
+  cd build/arm_Debug
 elif [ ${build_type} == "Release" ]
 then
-  mkdir -p build/Release
-  cd build/Release
+  mkdir -p build/arm_Release
+  cd build/arm_Release
 elif [ ${build_type} == "RelWithDebInfo" ]
 then
-  mkdir -p build/relwithdebinfo
-  cd build/relwithdebinfo
+  mkdir -p build/arm_relwithdebinfo
+  cd build/arm_relwithdebinfo
 elif [ ${build_type} == "MinSizeRel" ]
 then
-  mkdir -p build/minsizerel
-  cd build/minsizerel
+  mkdir -p build/arm_minsizerel
+  cd build/arm_minsizerel
 else
   echo ""
   echo "unknow build type: ${build_type}, valid build types(case intensive): Debug, Release, RelWithDebInfo, MinSizeRel"
   echo ""
   exit 1
 fi
+
+# 使用arm工具链，并且不检查C_COMPILER
+# cmake ../../                           \
+#   -DGTEST=$gtest_project_dir           \
+#   -DZLIB=$zlib_project_dir/install     \
+#   -DLZ4LIB=$lz4lib_project_dir         \
+#   -DBUILD_TEST=$build_test             \
+#   -DCMAKE_BUILD_TYPE=$build_type       \
+#   -DUSE_CPP11=$use_cpp11               \
+#   -DENABLE_COV=$enable_cov             \
+#   -DDEBUG_SE=$debug_se                 \
+#   -DBUILD_TSFILE_ONLY=$build_tsfile_only  \
+#   -DCMAKE_TOOLCHAIN_FILE=toolchain-arm.cmake \
+#   -DCMAKE_C_COMPILER_FORCED=ON         \
+#   -DCMAKE_CXX_COMPILER_FORCED=ON       \
+#   -DCMAKE_POLICY_DEFAULT_CMP0025=NEW
 
 cmake ../../                           \
   -DGTEST=$gtest_project_dir           \
@@ -127,11 +143,11 @@ cmake ../../                           \
   -DUSE_CPP11=$use_cpp11               \
   -DENABLE_COV=$enable_cov             \
   -DDEBUG_SE=$debug_se                 \
-  -DBUILD_TSFILE_ONLY=$build_tsfile_only
+  -DBUILD_TSFILE_ONLY=$build_tsfile_only  \
+  -DCMAKE_TOOLCHAIN_FILE=toolchain-arm.cmake 
 
 VERBOSE=1 make
-VERBOSE=1 make install
-
+# VERBOSE=1 make install
 
 
 
