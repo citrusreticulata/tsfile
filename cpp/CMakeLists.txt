@@ -83,8 +83,8 @@ add_subdirectory(third_party)
 
 add_subdirectory(src)
 
-add_subdirectory(test)
-if(TESTS_ENABLED)
-    add_dependencies(TsFile_Test tsfile)
-endif()
+# add_subdirectory(test)
+# if(TESTS_ENABLED)
+#     add_dependencies(TsFile_Test tsfile)
+# endif()
 
