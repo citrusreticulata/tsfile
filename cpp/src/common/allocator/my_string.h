@@ -35,6 +35,13 @@ struct String {
 
     String() : buf_(nullptr), len_(0) {}
     String(char *buf, uint32_t len) : buf_(buf), len_(len) {}
+    String(const std::string& str, common::PageArena& pa) : buf_(nullptr), len_(0) {
+        dup_from(str, pa);
+    }
+    String(const std::string& str) {
+        buf_ = (char*)str.c_str();
+        len_ = str.size();
+    }
     FORCE_INLINE bool is_null() const { return buf_ == nullptr && len_ == 0; }
     FORCE_INLINE void reset() {
         len_ = 0;
@@ -128,6 +135,18 @@ struct String {
         }
     }
 
+    FORCE_INLINE void max(const String &that, common::PageArena &pa) {
+        if (compare(that) < 0) {
+            this->dup_from(that, pa);
+        }
+    }
+
+    FORCE_INLINE void min(const String &that, common::PageArena &pa) {
+        if (compare(that) > 0) {
+            this->dup_from(that, pa);
+        }
+    }
+
     bool operator<(const String &other) const {
         if (this->is_null() && other.is_null()) {
             return false;
@@ -147,7 +166,7 @@ struct String {
 
         return this->len_ < other.len_;
     }
-    std::string to_std_string() { return std::string(buf_, len_); }
+    std::string to_std_string() const { return std::string(buf_, len_); }
 
 #ifndef NDEBUG
     friend std::ostream &operator<<(std::ostream &os, const String &s) {

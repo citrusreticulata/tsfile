@@ -99,6 +99,7 @@ void AlignedChunkReader::destroy() {
         value_in_stream_.clear_wrapped_buf();
     }
     cur_value_page_header_.reset();
+    chunk_header_.~ChunkHeader();
 }
 
 int AlignedChunkReader::load_by_aligned_meta(ChunkMeta *time_chunk_meta,
@@ -204,7 +205,7 @@ int AlignedChunkReader::alloc_compressor_and_decoder(
 }
 
 int AlignedChunkReader::get_next_page(TsBlock *ret_tsblock,
-                                      Filter *oneshoot_filter) {
+                                      Filter *oneshoot_filter, PageArena &pa) {
     int ret = E_OK;
     Filter *filter =
         (oneshoot_filter != nullptr ? oneshoot_filter : time_filter_);
@@ -527,9 +528,9 @@ int AlignedChunkReader::decode_time_value_buf_into_tsblock(
         uint32_t mask = 1 << 7;                                                \
         int64_t time = 0;                                                      \
         CppType value;                                                         \
-        while ((time_decoder_->has_remaining() &&                              \
-                value_decoder_->has_remaining()) ||                            \
-               (time_in.has_remaining() && value_in.has_remaining())) {        \
+        while ((time_decoder_->has_remaining() || time_in.has_remaining())     \
+                && (value_decoder_->has_remaining() ||                        \
+                value_in.has_remaining())){                                     \
             cur_value_index++;                                                 \
             if (((value_page_col_notnull_bitmap_[cur_value_index / 8] &        \
                   0xFF) &                                                      \

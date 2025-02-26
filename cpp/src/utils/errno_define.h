@@ -70,6 +70,10 @@ const int E_MEASUREMENT_NOT_EXIST = 45;
 const int E_INVALID_QUERY = 46;
 const int E_SDK_QUERY_OPTIMIZE_ERR = 47;
 const int E_COMPRESS_ERR = 48;
+const int E_TABLE_NOT_EXIST = 49;
+const int E_COLUMN_NOT_EXIST = 50;
+const int E_UNSUPPORTED_ORDER = 51;
+const int E_INVALID_NODE_TYPE = 52;
 
 }  // end namespace common
 

@@ -38,10 +38,11 @@ class TsFileSeriesScanIterator {
    public:
     TsFileSeriesScanIterator()
         : read_file_(nullptr),
-          device_path_(),
+          device_id_(),
           measurement_name_(),
           itimeseries_index_(),
           timeseries_index_pa_(),
+          data_pa_(nullptr),
           chunk_meta_cursor_(),
           chunk_reader_(nullptr),
           tuple_desc_(),
@@ -49,14 +50,15 @@ class TsFileSeriesScanIterator {
           time_filter_(nullptr),
           is_aligned_(false) {}
     ~TsFileSeriesScanIterator() { destroy(); }
-    int init(const std::string &device_path,
+    int init(std::shared_ptr<IDeviceID> device_id,
              const std::string &measurement_name, ReadFile *read_file,
-             Filter *time_filter) {
+             Filter *time_filter, common::PageArena &data_pa) {
         ASSERT(read_file != nullptr);
-        device_path_ = device_path;
+        device_id_ = device_id;
         measurement_name_ = measurement_name;
         read_file_ = read_file;
         time_filter_ = time_filter;
+        data_pa_ = &data_pa;
         return common::E_OK;
     }
     void destroy();
@@ -95,11 +97,12 @@ class TsFileSeriesScanIterator {
 
    private:
     ReadFile *read_file_;
-    std::string device_path_;
+    std::shared_ptr<IDeviceID> device_id_;
     std::string measurement_name_;
 
     ITimeseriesIndex *itimeseries_index_;
     common::PageArena timeseries_index_pa_;
+    common::PageArena *data_pa_;
     common::SimpleList<ChunkMeta *>::Iterator chunk_meta_cursor_;
     common::SimpleList<ChunkMeta *>::Iterator time_chunk_meta_cursor_;
     common::SimpleList<ChunkMeta *>::Iterator value_chunk_meta_cursor_;
