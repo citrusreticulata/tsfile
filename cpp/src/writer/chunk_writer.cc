@@ -25,9 +25,9 @@ using namespace common;
 
 namespace storage {
 
-int ChunkWriter::init(const ColumnDesc &col_desc) {
-    return init(col_desc.column_name_, col_desc.type_, col_desc.encoding_,
-                col_desc.compression_);
+int ChunkWriter::init(const ColumnSchema &col_schema) {
+    return init(col_schema.column_name_, col_schema.data_type_, col_schema.encoding_,
+                col_schema.compression_);
 }
 
 int ChunkWriter::init(const std::string &measurement_name, TSDataType data_type,
@@ -148,9 +148,11 @@ int ChunkWriter::end_encode_chunk() {
     }
 #if DEBUG_SE
     std::cout << "end_encode_chunk: num_of_pages_=" << num_of_pages_
-              << ", chunk_header_.data_size_=" << chunk_header_.data_size_
-              << ", page_writer.get_statistic()->count_="
-              << page_writer_.get_statistic()->count_ << std::endl;
+              << ", chunk_header_.data_size_=" << chunk_header_.data_size_;
+    if (page_writer_.get_statistic()) {
+        std::cout << ", page_writer.get_statistic()->count_="
+                  << page_writer_.get_statistic()->count_ << std::endl;
+    }
 #endif
     return ret;
 }

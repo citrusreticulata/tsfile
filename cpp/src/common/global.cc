@@ -28,7 +28,7 @@
 
 namespace common {
 
-ColumnDesc g_time_column_desc;
+ColumnSchema g_time_column_schema;
 ConfigValue g_config_value_;
 
 void init_config_value() {
@@ -46,6 +46,38 @@ void init_config_value() {
     g_config_value_.time_compress_type_ = LZ4;
 }
 
+extern TSEncoding get_value_encoder(TSDataType data_type) {
+    switch (data_type) {
+        case BOOLEAN:
+            return TSEncoding::RLE;
+        case INT32:
+            return TSEncoding::TS_2DIFF;
+        case INT64:
+            return TSEncoding::TS_2DIFF;
+        case FLOAT:
+            return TSEncoding::GORILLA;
+        case DOUBLE:
+            return TSEncoding::GORILLA;
+        case TEXT:
+            return TSEncoding::PLAIN;
+        case STRING:
+            return TSEncoding::PLAIN;
+        case VECTOR:
+            break;
+        case NULL_TYPE:
+            break;
+        case INVALID_DATATYPE:
+            break;
+        default:
+            break;
+    }
+    return TSEncoding::INVALID_ENCODING;
+}
+
+extern CompressionType get_default_compressor() {
+    return LZ4;
+}
+
 void config_set_page_max_point_count(uint32_t page_max_ponint_count) {
     g_config_value_.page_writer_max_point_num_ = page_max_ponint_count;
 }
@@ -55,9 +87,8 @@ void config_set_max_degree_of_index_node(uint32_t max_degree_of_index_node) {
 }
 
 void set_config_value() {}
-
-const char* s_data_type_names[7] = {"BOOLEAN", "INT32", "INT64", "FLOAT",
-                                    "DOUBLE",  "TEXT",  "VECTOR"};
+const char* s_data_type_names[8] = {"BOOLEAN", "INT32", "INT64", "FLOAT",
+                                    "DOUBLE",  "TEXT",  "VECTOR", "STRING"};
 
 const char* s_encoding_names[12] = {
     "PLAIN",      "DICTIONARY", "RLE",     "DIFF",   "TS_2DIFF", "BITMAP",
@@ -70,12 +101,10 @@ const char* s_compression_names[8] = {
 int init_common() {
     int ret = E_OK;
     common::init_config_value();
-    g_time_column_desc.type_ = INT64;
-    g_time_column_desc.encoding_ = PLAIN;
-    g_time_column_desc.compression_ = UNCOMPRESSED;
-    g_time_column_desc.ttl_ = INT64_MAX;  // TODO
-    g_time_column_desc.column_name_ = std::string("time");
-    g_time_column_desc.ts_id_ = TsID(0, 0, 0);
+    g_time_column_schema.data_type_ = INT64;
+    g_time_column_schema.encoding_ = PLAIN;
+    g_time_column_schema.compression_ = UNCOMPRESSED;
+    g_time_column_schema.column_name_ = std::string("time");
     return ret;
 }
 
@@ -92,7 +121,7 @@ bool is_timestamp_column_name(const char* time_col_name) {
 }
 
 void cols_to_json(ByteStream* byte_stream,
-                  std::vector<common::ColumnDesc>& ret_ts_list) {
+                  std::vector<common::ColumnSchema>& ret_ts_list) {
     // 1. append start tag
     byte_stream->write_buf("{\n", 2);
 
@@ -105,7 +134,7 @@ void cols_to_json(ByteStream* byte_stream,
         byte_stream->write_buf("\" : {\n", 6);
 
         // 3. append DataType
-        const char* data_type = get_data_type_name(ret_ts_list[i].type_);
+        const char* data_type = get_data_type_name(ret_ts_list[i].data_type_);
         byte_stream->write_buf("    \"DataType\" : \"", 18);
         byte_stream->write_buf(data_type, strlen(data_type));
         byte_stream->write_buf("\",\n", 3);
@@ -123,25 +152,7 @@ void cols_to_json(ByteStream* byte_stream,
         byte_stream->write_buf(compression, strlen(compression));
         byte_stream->write_buf("\",\n", 3);
 
-        // 6. append TTL
-        std::string ttl_str = to_string(ret_ts_list[i].ttl_);
-        if (ret_ts_list[i].ttl_ == INVALID_TTL) {
-            byte_stream->write_buf("    \"TTL\" : \"INVALID\",\n",
-                                   23);  // if it is the end, delete ','
-        } else {
-            byte_stream->write_buf("    \"TTL\" : \"", 13);
-            byte_stream->write_buf(ttl_str.c_str(), ttl_str.length());
-            byte_stream->write_buf("\",\n", 3);  // if it is the end, delete ','
-        }
-
-        // TODO : this is used for Debug
-        // 7. append TsId
-        std::string tsid_str = ret_ts_list[i].ts_id_.to_string();
-        byte_stream->write_buf("    \"TsID\" : \"", 14);
-        byte_stream->write_buf(tsid_str.c_str(), tsid_str.length());
-        byte_stream->write_buf("\"\n", 2);
-
-        // 8. append footer
+        // 6. append footer
         if (i == ts_count - 1) {
             byte_stream->write_buf("  }\n", 4);
         } else {
@@ -149,7 +160,7 @@ void cols_to_json(ByteStream* byte_stream,
         }
     }
 
-    // 9. end
+    // 7. end
     byte_stream->write_buf("}\n", 2);
 
     // DEBUG_print_byte_stream(*byte_stream);  // for debug

@@ -4,7 +4,7 @@
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
+ * License); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -17,25 +17,22 @@
  * under the License.
  */
 
-package org.apache.tsfile.utils;
+#include "reader/task/device_task_iterator.h"
 
-public class EncodingUtils {
-
-  // Copied from org.apache.iotdb.db.utils.MathUtils
-  public static float roundWithGivenPrecision(float data, int size) {
-    if (size == 0) {
-      return Math.round(data);
-    }
-    return Math.round(data)
-        + Math.round(((data - Math.round(data)) * Math.pow(10, size))) / (float) Math.pow(10, size);
-  }
-
-  // Copied from org.apache.iotdb.db.utils.MathUtils
-  public static double roundWithGivenPrecision(double data, int size) {
-    if (size == 0) {
-      return Math.round(data);
-    }
-    return Math.round(data)
-        + Math.round(((data - Math.round(data)) * Math.pow(10, size))) / Math.pow(10, size);
-  }
+namespace storage {
+bool DeviceTaskIterator::has_next() const {
+    return device_meta_iterator_->has_next();
 }
+
+int DeviceTaskIterator::next(DeviceQueryTask *&task) {
+    int ret = common::E_OK;
+    std::pair<std::shared_ptr<IDeviceID>, MetaIndexNode *> device_meta_pair;
+    if (RET_FAIL(device_meta_iterator_->next(device_meta_pair))) {
+    } else {
+        task = DeviceQueryTask::create_device_query_task(
+            device_meta_pair.first, column_names_, column_mapping_, device_meta_pair.second,
+            table_schema_, pa_);
+    }
+    return ret;
+}
+}  // namespace storage
