@@ -72,15 +72,21 @@ class PageArena {
             if (cur_alloc_ + size > page_end_) {
                 return nullptr;
             } else {
-                char *ret = cur_alloc_;
-                cur_alloc_ += size;
-                return ret;
+                // char *ret = cur_alloc_;
+                // cur_alloc_ += size;
+                // return ret;
                 //        char *ret = cur_alloc_;
                 //        cur_alloc_ += size;
                 //        int address = reinterpret_cast<uintptr_t>(cur_alloc_);
                 //        int new_addr = (address + 3) & (~3);
                 //        cur_alloc_ = reinterpret_cast<char *>(new_addr);
                 //        return ret;
+                char *ret = cur_alloc_;
+                cur_alloc_ += size;
+                uintptr_t address = reinterpret_cast<uintptr_t>(cur_alloc_);
+                uintptr_t new_addr = (address + 3) & (~3);
+                cur_alloc_ = reinterpret_cast<char *>(new_addr);
+                return ret;
             }
         }
 
