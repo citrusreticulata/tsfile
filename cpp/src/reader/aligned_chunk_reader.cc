@@ -258,13 +258,15 @@ int AlignedChunkReader::get_cur_page_header(ChunkMeta *&chunk_meta,
         if (deserialize_buf_not_enough(ret) && retry) {
             retry = false;
             retry_read_want_size += 1024;
-            int32_t file_data_buf_size =
+            int32_t &file_data_buf_size =
                 chunk_header.data_type_ == common::VECTOR
                     ? file_data_time_buf_size_
                     : file_data_value_buf_size_;
+            // do not shrink buffer for page header, otherwise, the buffer is
+            // most likely to grow back when reading page data
             if (E_OK == read_from_file_and_rewrap(
                             in_stream, chunk_meta, chunk_visit_offset,
-                            file_data_buf_size, retry_read_want_size)) {
+                            file_data_buf_size, retry_read_want_size, false)) {
                 continue;
             }
         }
@@ -289,14 +291,15 @@ int AlignedChunkReader::get_cur_page_header(ChunkMeta *&chunk_meta,
 // @in_stream_
 int AlignedChunkReader::read_from_file_and_rewrap(
     common::ByteStream &in_stream_, ChunkMeta *&chunk_meta,
-    uint32_t &chunk_visit_offset, int32_t file_data_buf_size, int want_size) {
+    uint32_t &chunk_visit_offset, int32_t &file_data_buf_size, int want_size,
+    bool may_shrink) {
     int ret = E_OK;
     const int DEFAULT_READ_SIZE = 4096;  // may use page_size + page_header_size
     char *file_data_buf = in_stream_.get_wrapped_buf();
     int offset = chunk_meta->offset_of_chunk_header_ + chunk_visit_offset;
     int read_size =
         (want_size < DEFAULT_READ_SIZE ? DEFAULT_READ_SIZE : want_size);
-    if (file_data_buf_size < read_size || read_size < file_data_buf_size / 10) {
+    if (file_data_buf_size < read_size || (may_shrink && read_size < file_data_buf_size / 10)) {
         file_data_buf = (char *)mem_realloc(file_data_buf, read_size);
         if (IS_NULL(file_data_buf)) {
             return E_OOM;
@@ -350,8 +353,8 @@ int AlignedChunkReader::decode_cur_time_page_data() {
         // << cur_page_header_.compressed_size_ << std::endl;
         if (RET_FAIL(read_from_file_and_rewrap(
                 time_in_stream_, time_chunk_meta_, time_chunk_visit_offset_,
-                cur_time_page_header_.compressed_size_,
-                file_data_time_buf_size_))) {
+                file_data_time_buf_size_,
+                cur_value_page_header_.compressed_size_))) {
         }
     }
 
@@ -359,8 +362,7 @@ int AlignedChunkReader::decode_cur_time_page_data() {
     char *time_uncompressed_buf = nullptr;
     uint32_t time_compressed_buf_size = 0;
     uint32_t time_uncompressed_buf_size = 0;
-    char *time_buf = nullptr;
-    uint32_t time_buf_size = 0;
+
 
     // Step 2: do uncompress
     if (IS_SUCC(ret)) {
@@ -395,26 +397,12 @@ int AlignedChunkReader::decode_cur_time_page_data() {
         }
     }
 
-    // Step 3: get time_buf
-    if (IS_SUCC(ret)) {
-        int var_size = 0;
-        if (RET_FAIL(SerializationUtil::read_var_uint(
-                time_buf_size, time_uncompressed_buf,
-                time_uncompressed_buf_size, &var_size))) {
-        } else {
-            time_buf = time_uncompressed_buf + var_size;
-            if (time_uncompressed_buf_size < var_size + time_buf_size) {
-                ret = E_TSFILE_CORRUPTED;
-                ASSERT(false);
-            }
-        }
-    }
     time_decoder_->reset();
 #ifdef DEBUG_SE
     DEBUG_hex_dump_buf("AlignedChunkReader reader, time_buf = ", time_buf,
                        time_buf_size);
 #endif
-    time_in_.wrap_from(time_buf, time_buf_size);
+    time_in_.wrap_from(time_uncompressed_buf_, time_uncompressed_buf_size);
     return ret;
 }
 
@@ -429,8 +417,8 @@ int AlignedChunkReader::decode_cur_value_page_data() {
         // << cur_page_header_.compressed_size_ << std::endl;
         if (RET_FAIL(read_from_file_and_rewrap(
                 value_in_stream_, value_chunk_meta_, value_chunk_visit_offset_,
-                cur_value_page_header_.compressed_size_,
-                file_data_value_buf_size_))) {
+                file_data_value_buf_size_,
+                cur_value_page_header_.compressed_size_))) {
         }
     }
 
@@ -529,19 +517,26 @@ int AlignedChunkReader::decode_time_value_buf_into_tsblock(
         int64_t time = 0;                                                      \
         CppType value;                                                         \
         while ((time_decoder_->has_remaining() || time_in.has_remaining())     \
-                && (value_decoder_->has_remaining() ||                        \
-                value_in.has_remaining())){                                     \
+                && (value_decoder_->has_remaining() ||                         \
+                value_in.has_remaining())){                                    \
             cur_value_index++;                                                 \
             if (((value_page_col_notnull_bitmap_[cur_value_index / 8] &        \
                   0xFF) &                                                      \
                  (mask >> (cur_value_index % 8))) == 0) {                      \
-                RET_FAIL(time_decoder_->read_int64(time, time_in));            \
+                ret = time_decoder_->read_int64(time, time_in);                \
                 if (ret != E_OK) {                                             \
                     break;                                                     \
                 }                                                              \
+                ret = value_decoder_->read_##ReadType(value,                   \
+                value_in);                                                     \
+                if (ret != E_OK) {                                             \
+                    break;                                                     \
+                }                                                              \
+                continue;                                                      \
             }                                                                  \
             if (UNLIKELY(!row_appender.add_row())) {                           \
                 ret = E_OVERFLOW;                                              \
+                cur_value_index--;                                            \
                 break;                                                         \
             } else if (RET_FAIL(time_decoder_->read_int64(time, time_in))) {   \
             } else if (RET_FAIL(value_decoder_->read_##ReadType(value,         \
@@ -569,7 +564,6 @@ int AlignedChunkReader::i32_DECODE_TYPED_TV_INTO_TSBLOCK(
         while ((time_decoder_->has_remaining() &&
                 value_decoder_->has_remaining()) ||
                (time_in.has_remaining() && value_in.has_remaining())) {
-            cur_value_index++;
             if (((value_page_col_notnull_bitmap_[cur_value_index / 8] & 0xFF) &
                  (mask >> (cur_value_index % 8))) == 0) {
                 RET_FAIL(time_decoder_->read_int64(time, time_in));

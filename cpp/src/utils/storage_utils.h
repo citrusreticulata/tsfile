@@ -21,6 +21,7 @@
 
 #include <inttypes.h>
 #include <stdint.h>
+#include <algorithm>
 
 #include "common/datatype/value.h"
 #include "common/tsblock/tsblock.h"
@@ -70,14 +71,23 @@ struct InsertResult {
 
 FORCE_INLINE std::string get_file_path_from_file_id(
     const common::FileID &file_id) {
-    // TODO prefix len + number len
-    const int len = 256;
-    char path_buf[len];
-    memset(path_buf, 0, len);
-    // TODO config
-    snprintf(path_buf, len, "./%" PRId64 "-%d-%d.tsfile", file_id.seq_,
-             file_id.version_, file_id.merge_);
-    return std::string(path_buf);
+    std::ostringstream oss;
+    oss << "./" << file_id.seq_ << "-" << file_id.version_ << "-"
+        << file_id.merge_ << ".tsfile";
+    return oss.str();
+}
+
+static void to_lowercase_inplace(std::string &str) {
+    std::transform(
+        str.begin(), str.end(), str.begin(),
+        [](unsigned char c) -> unsigned char { return std::tolower(c); });
+}
+static std::string to_lower(const std::string &str) {
+    std::string result;
+    std::transform(
+        str.begin(), str.end(), std::back_inserter(result),
+        [](unsigned char c) -> unsigned char { return std::tolower(c); });
+    return result;
 }
 
 }  // end namespace storage

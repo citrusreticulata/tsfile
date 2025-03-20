@@ -47,12 +47,12 @@ class SingleDeviceTsBlockReader : public TsBlockReader {
     void close() override;
 
    private:
-    void construct_column_context(const ITimeseriesIndex* time_series_index,
+    int construct_column_context(const ITimeseriesIndex* time_series_index,
                                   Filter* time_filter);
     int fill_measurements(
         std::vector<MeasurementColumnContext*>& column_contexts);
     int fill_ids();
-    void advance_column(MeasurementColumnContext* column_context);
+    int advance_column(MeasurementColumnContext* column_context);
 
     DeviceQueryTask* device_query_task_;
     Filter* field_filter_;
@@ -112,8 +112,11 @@ class SingleMeasurementColumnContext final : public MeasurementColumnContext {
             delete value_iter_;
             value_iter_ = nullptr;
         }
-        ssi_->revert_tsblock();
+        if (ssi_) {
+            ssi_->revert_tsblock();
+        }
         tsfile_io_reader_->revert_ssi(ssi_);
+        ssi_ = nullptr;
     }
 
     void fill_into(std::vector<common::ColAppender*>& col_appenders) override;
@@ -127,6 +130,7 @@ class SingleMeasurementColumnContext final : public MeasurementColumnContext {
     int get_current_time(int64_t& time) override;
     int get_current_value(char*& value, uint32_t& len) override;
     int move_iter() override;
+
 
    private:
     std::string column_name_;
