@@ -45,6 +45,7 @@ class WriteFile {
     int sync();
     int close();
     FORCE_INLINE std::string get_file_path() { return path_; }
+    int getFD(){ return fd_; }
 
    private:
     int do_create(int flags, mode_t mode);
