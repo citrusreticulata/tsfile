@@ -52,12 +52,12 @@ class TsFileWriter {
     ~TsFileWriter();
     void destroy();
 
-    int open(const std::string &file_path, int flags, mode_t mode);
-    int open(const std::string &file_path);
+    virtual int open(const std::string &file_path, int flags, mode_t mode);
+    virtual int open(const std::string &file_path);
     int init(storage::WriteFile *write_file);
 
     void set_generate_table_schema(bool generate_table_schema);
-    int register_timeseries(const std::string &device_id,
+    virtual int register_timeseries(const std::string &device_id,
                             const MeasurementSchema &measurement_schema);
     int register_timeseries(const std::string &device_path,
         const std::vector<MeasurementSchema *> &measurement_schema_vec);
@@ -101,7 +101,7 @@ class TsFileWriter {
      */
     int close();
 
-   private:
+   protected:
     int write_point(storage::ChunkWriter *chunk_writer, int64_t timestamp,
                     const DataPoint &point);
     bool check_chunk_group_empty(MeasurementSchemaGroup *chunk_group,
@@ -160,13 +160,13 @@ class TsFileWriter {
     int time_write_column(TimeChunkWriter *time_chunk_writer,
                           const Tablet &tablet, uint32_t start_idx = 0,
                           uint32_t end_idx = UINT32_MAX);
-    int register_timeseries(const std::string &device_path,
+    virtual int register_timeseries(const std::string &device_path,
                             MeasurementSchema *measurement_schema,
                             bool is_aligned = false);
     std::vector<std::pair<std::shared_ptr<IDeviceID>, int>>
     split_tablet_by_device(const Tablet &tablet);
 
-   private:
+   protected:
     storage::WriteFile *write_file_;
     storage::TsFileIOWriter *io_writer_;
     // device_id -> MeasurementSchemaGroup
