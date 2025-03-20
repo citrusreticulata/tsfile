@@ -51,6 +51,20 @@ int TimeChunkWriter::init(const std::string &measurement_name,
     return ret;
 }
 
+void TimeChunkWriter::reset() {
+    if (chunk_statistic_ != nullptr) {
+        chunk_statistic_->reset();
+    }
+    if (first_page_statistic_ != nullptr) {
+        first_page_statistic_->reset();
+    }
+    time_page_writer_.reset();
+    chunk_header_.reset();
+    chunk_data_.reset();
+    num_of_pages_ = 0;
+}
+
+
 void TimeChunkWriter::destroy() {
     if (num_of_pages_ == 1) {
         free_first_writer_data();
@@ -82,7 +96,7 @@ int TimeChunkWriter::seal_cur_page(bool end_chunk) {
                 time_page_writer_.write_to_chunk(chunk_data_, /*header*/ true,
                                                  /*stat*/ false, /*data*/ true);
             time_page_writer_.destroy_page_data();
-            time_page_writer_.destroy();
+            time_page_writer_.reset();
         } else {
             /*
              * if the chunk has only one page, do not writer page statistic.
@@ -130,9 +144,9 @@ void TimeChunkWriter::save_first_page_data(TimePageWriter &first_page_writer) {
     first_page_statistic_->deep_copy_from(first_page_writer.get_statistic());
 }
 
-int TimeChunkWriter::write_first_page_data(ByteStream &pages_data) {
+int TimeChunkWriter::write_first_page_data(ByteStream &pages_data, bool with_statistic) {
     int ret = E_OK;
-    if (RET_FAIL(first_page_statistic_->serialize_to(pages_data))) {
+    if (with_statistic && RET_FAIL(first_page_statistic_->serialize_to(pages_data))) {
     } else if (RET_FAIL(
                    pages_data.write_buf(first_page_data_.compressed_buf_,
                                         first_page_data_.compressed_size_))) {
@@ -145,6 +159,13 @@ int TimeChunkWriter::end_encode_chunk() {
     if (time_page_writer_.get_statistic()->count_ > 0) {
         ret = seal_cur_page(/*end_chunk*/ true);
         if (E_OK == ret) {
+            chunk_header_.data_size_ = chunk_data_.total_size();
+            chunk_header_.num_of_pages_ = num_of_pages_;
+        }
+    } else if (first_page_statistic_ != nullptr) {
+        ret = write_first_page_data(chunk_data_, false);
+        if (E_OK == ret) {
+            free_first_writer_data();
             chunk_header_.data_size_ = chunk_data_.total_size();
             chunk_header_.num_of_pages_ = num_of_pages_;
         }

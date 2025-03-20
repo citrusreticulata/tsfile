@@ -35,7 +35,7 @@ void init_config_value() {
     g_config_value_.tsblock_mem_inc_step_size_ = 8000;  // 8k
     g_config_value_.tsblock_max_memory_ = 64000;        // 64k
     // g_config_value_.tsblock_max_memory_ = 32;
-    g_config_value_.page_writer_max_point_num_ = 5;
+    g_config_value_.page_writer_max_point_num_ = 10000;
     g_config_value_.page_writer_max_memory_bytes_ = 128 * 1024;  // 128 k
     g_config_value_.max_degree_of_index_node_ = 256;
     g_config_value_.tsfile_index_bloom_filter_error_percent_ = 0.05;
@@ -78,8 +78,8 @@ extern CompressionType get_default_compressor() {
     return LZ4;
 }
 
-void config_set_page_max_point_count(uint32_t page_max_ponint_count) {
-    g_config_value_.page_writer_max_point_num_ = page_max_ponint_count;
+void config_set_page_max_point_count(uint32_t page_max_point_count) {
+    g_config_value_.page_writer_max_point_num_ = page_max_point_count;
 }
 
 void config_set_max_degree_of_index_node(uint32_t max_degree_of_index_node) {
@@ -185,7 +185,6 @@ void print_backtrace() {
 }
 #endif
 
-Mutex g_all_inject_points_mutex;
 std::map<std::string, InjectPoint> g_all_inject_points;
 
 }  // namespace common

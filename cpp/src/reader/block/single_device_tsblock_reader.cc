@@ -39,7 +39,6 @@ int SingleDeviceTsBlockReader::init(DeviceQueryTask* device_query_task,
     int ret = common::E_OK;
     pa_.init(512, common::AllocModID::MOD_TSFILE_READER);
     tuple_desc_.reset();
-    common::init_common();
     auto table_schema = device_query_task->get_table_schema();
     tuple_desc_.push_back(common::g_time_column_schema);
     for (const auto& column_name : device_query_task_->get_column_names()) {
@@ -73,6 +72,13 @@ int SingleDeviceTsBlockReader::init(DeviceQueryTask* device_query_task,
     }
     for (const auto& time_series_index : time_series_indexs) {
         construct_column_context(time_series_index, time_filter);
+    }
+
+    // There is no data in this single device tsblock reader.
+    if (field_column_contexts_.empty()) {
+        delete current_block_;
+        current_block_ = nullptr;
+        return common::E_OK;
     }
 
     for (const auto& id_column :
@@ -159,19 +165,24 @@ int SingleDeviceTsBlockReader::fill_measurements(
         }
         col_appenders_[time_column_index_]->append((const char*)&next_time_,
                                                    sizeof(next_time_));
-        for (auto& column_contest : column_contexts) {
-            column_contest->fill_into(col_appenders_);
-            advance_column(column_contest);
+        for (auto& column_context : column_contexts) {
+            column_context->fill_into(col_appenders_);
+            if (RET_FAIL(advance_column(column_context))) {
+                break;
+            }
         }
     }
     return ret;
 }
 
-void SingleDeviceTsBlockReader::advance_column(
+int SingleDeviceTsBlockReader::advance_column(
     MeasurementColumnContext* column_context) {
-    if (column_context->move_iter() == common::E_NO_MORE_DATA) {
+    int ret = column_context->move_iter();
+    if (ret == common::E_NO_MORE_DATA) {
         column_context->remove_from(field_column_contexts_);
+        ret = common::E_OK;
     }
+    return ret;
 }
 
 void SingleMeasurementColumnContext::remove_from(
@@ -191,8 +202,9 @@ int SingleDeviceTsBlockReader::fill_ids() {
             common::String device_id(
                 device_query_task_->get_device_id()->get_segments().at(
                     id_column_context.pos_in_device_id_));
-            if (RET_FAIL(col_appenders_[pos + 1]->fill((char*)&device_id, sizeof(device_id),
-                                      current_block_->get_row_count()))) {
+            if (RET_FAIL(col_appenders_[pos + 1]->fill(
+                    (char*)&device_id, sizeof(device_id),
+                    current_block_->get_row_count()))) {
                 return ret;
             }
         }
@@ -228,13 +240,18 @@ void SingleDeviceTsBlockReader::close() {
     if (device_query_task_) {
         device_query_task_->~DeviceQueryTask();
     }
+    if (current_block_) {
+        delete current_block_;
+        current_block_ = nullptr;
+    }
 }
 
-void SingleDeviceTsBlockReader::construct_column_context(
+int SingleDeviceTsBlockReader::construct_column_context(
     const ITimeseriesIndex* time_series_index, Filter* time_filter) {
+    int ret = common::E_OK;
     if (time_series_index == nullptr ||
         (time_series_index->get_data_type() != common::TSDataType::VECTOR &&
-        time_series_index->get_chunk_meta_list()->empty())) {
+         time_series_index->get_chunk_meta_list()->empty())) {
     } else if (time_series_index->get_data_type() == common::VECTOR) {
         const AlignedTimeseriesIndex* aligned_time_series_index =
             dynamic_cast<const AlignedTimeseriesIndex*>(time_series_index);
@@ -246,26 +263,35 @@ void SingleDeviceTsBlockReader::construct_column_context(
         // VectorMeasurementColumnContext
         SingleMeasurementColumnContext* column_context =
             new SingleMeasurementColumnContext(tsfile_io_reader_);
-        column_context->init(
-            device_query_task_, time_series_index, time_filter,
-            device_query_task_->get_column_mapping()->get_column_pos(
-                time_series_index->get_measurement_name().to_std_string()),
-            pa_);
+        // May no more data. just return to avoid null pointer.
+        if (RET_FAIL(column_context->init(
+                device_query_task_, time_series_index, time_filter,
+                device_query_task_->get_column_mapping()->get_column_pos(
+                    time_series_index->get_measurement_name().to_std_string()),
+                pa_))) {
+            delete column_context;
+            return ret;
+        }
         field_column_contexts_.insert(std::make_pair(
             time_series_index->get_measurement_name().to_std_string(),
             column_context));
     } else {
         SingleMeasurementColumnContext* column_context =
             new SingleMeasurementColumnContext(tsfile_io_reader_);
-        column_context->init(
-            device_query_task_, time_series_index, time_filter,
-            device_query_task_->get_column_mapping()->get_column_pos(
-                time_series_index->get_measurement_name().to_std_string()),
-            pa_);
+        if (RET_FAIL(column_context->init(
+                device_query_task_, time_series_index, time_filter,
+                device_query_task_->get_column_mapping()->get_column_pos(
+                    time_series_index->get_measurement_name().to_std_string()),
+                pa_))) {
+            delete column_context;
+            return ret;
+        }
+
         field_column_contexts_.insert(std::make_pair(
             time_series_index->get_measurement_name().to_std_string(),
             column_context));
     }
+    return ret;
 }
 
 int SingleMeasurementColumnContext::init(
@@ -360,4 +386,5 @@ void SingleMeasurementColumnContext::fill_into(
         col_appenders[pos + 1]->append(val, len);
     }
 }
+
 }  // namespace storage

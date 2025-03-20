@@ -31,22 +31,20 @@ namespace storage {
 int TimePageData::init(ByteStream &time_bs, Compressor *compressor) {
     int ret = E_OK;
     time_buf_size_ = time_bs.total_size();
-    uint32_t var_size = get_var_uint_size(time_buf_size_);
-    uncompressed_size_ = var_size + time_buf_size_;
+    uncompressed_size_ = time_buf_size_;
     uncompressed_buf_ =
         (char *)mem_alloc(uncompressed_size_, MOD_PAGE_WRITER_OUTPUT_STREAM);
     compressor_ = compressor;
     if (IS_NULL(uncompressed_buf_)) {
         return E_OOM;
     }
+
     if (time_buf_size_ == 0) {
         return E_INVALID_ARG;
     }
-    if (RET_FAIL(SerializationUtil::write_var_uint(
-            time_buf_size_, uncompressed_buf_, var_size))) {
-    } else if (RET_FAIL(
-                   common::copy_bs_to_buf(time_bs, uncompressed_buf_ + var_size,
-                                          uncompressed_size_ - var_size))) {
+    // TODO: Maybe use time_bs as compressed_buf.
+    if (RET_FAIL(common::copy_bs_to_buf(time_bs, uncompressed_buf_,
+                                        uncompressed_size_))) {
     } else {
         // TODO
         // NOTE: different compressor may have different compress API
@@ -96,8 +94,12 @@ int TimePageWriter::init(TSEncoding encoding, CompressionType compression) {
 }
 
 void TimePageWriter::reset() {
-    time_encoder_->reset();
-    statistic_->reset();
+    if (time_encoder_ != nullptr) {
+        time_encoder_->reset();
+    }
+    if (statistic_ != nullptr) {
+        statistic_->reset();
+    }
     time_out_stream_.reset();
 }
 
@@ -110,6 +112,10 @@ void TimePageWriter::destroy() {
         EncoderFactory::free(time_encoder_);
         StatisticFactory::free(statistic_);
         CompressorFactory::free(compressor_);
+
+        time_encoder_ = nullptr;
+        statistic_ = nullptr;
+        compressor_ = nullptr;
     }
 }
 

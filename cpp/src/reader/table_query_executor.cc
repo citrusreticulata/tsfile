@@ -29,11 +29,9 @@ int TableQueryExecutor::query(const std::string &table_name,
     file_metadata = tsfile_io_reader_->get_tsfile_meta();
     common::PageArena pa;
     pa.init(512, common::MOD_TSFILE_READER);
-    common::String table_name_str;
-    table_name_str.dup_from(table_name, pa);
     MetaIndexNode *table_root = nullptr;
     std::shared_ptr<TableSchema> table_schema;
-    if (RET_FAIL(file_metadata->get_table_metaindex_node(table_name_str,
+    if (RET_FAIL(file_metadata->get_table_metaindex_node(table_name,
                                                          table_root))) {
     } else if (RET_FAIL(
                    file_metadata->get_table_schema(table_name, table_schema))) {
@@ -46,6 +44,12 @@ int TableQueryExecutor::query(const std::string &table_name,
     std::shared_ptr<ColumnMapping> column_mapping = std::make_shared<ColumnMapping>();
     for (size_t i = 0; i < columns.size(); ++i) {
         column_mapping->add(columns[i], static_cast<int>(i), *table_schema);
+    }
+    std::vector<common::TSDataType> data_types;
+    data_types.reserve(columns.size());
+    for (size_t i = 0; i < columns.size(); ++i) {
+        auto ind = table_schema->find_column_index(columns[i]);
+        data_types.push_back(table_schema->get_data_types()[ind]);
     }
     // column_mapping.add(*measurement_filter);
 
@@ -67,7 +71,7 @@ int TableQueryExecutor::query(const std::string &table_name,
     }
     assert(tsblock_reader != nullptr);
     ret_qds = new TableResultSet(std::move(tsblock_reader), columns,
-                                 table_schema->get_data_types());
+                                 data_types);
     return ret;
 }
 
