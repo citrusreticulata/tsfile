@@ -17,7 +17,7 @@
 #
 
 #cython: language_level=3
-from libc.stdint cimport uint32_t, int32_t, int64_t
+from libc.stdint cimport uint32_t, int32_t, int64_t, uint64_t, uint8_t
 
 ctypedef int32_t ErrorCode
 
@@ -42,6 +42,8 @@ cdef extern from "./tsfile_cwrapper.h":
         TS_DATATYPE_DOUBLE = 4
         TS_DATATYPE_TEXT = 5
         TS_DATATYPE_VECTOR = 6
+        TS_DATATYPE_DATE = 9
+        TS_DATATYPE_BLOB = 10
         TS_DATATYPE_STRING = 11
         TS_DATATYPE_NULL_TYPE = 254
         TS_DATATYPE_INVALID = 255
@@ -109,8 +111,12 @@ cdef extern from "./tsfile_cwrapper.h":
     ErrorCode tsfile_reader_close(TsFileReader reader)
 
     # writer： new and close
-    TsFileWriter _tsfile_writer_new(const char * pathname, ErrorCode * err_code);
+    TsFileWriter _tsfile_writer_new(const char * pathname, uint64_t memory_threshold,
+                                    ErrorCode * err_code);
     ErrorCode _tsfile_writer_close(TsFileWriter writer);
+
+    # writer : flush
+    ErrorCode _tsfile_writer_flush(TsFileWriter writer);
 
     # writer : register table, device and timeseries
     ErrorCode _tsfile_writer_register_table(TsFileWriter writer, TableSchema * schema);
@@ -155,7 +161,9 @@ cdef extern from "./tsfile_cwrapper.h":
     ErrorCode _insert_data_into_ts_record_by_name_double(TsRecord data, const char *measurement_name,
                                                          const double value);
     ErrorCode _insert_data_into_ts_record_by_name_bool(TsRecord data, const char *measurement_name, const  bint value);
-
+    ErrorCode _insert_data_into_ts_record_by_name_string_with_len(TsRecord data, const char *measurement_name,
+                                                                  const char *value,
+                                                                  const uint32_t value_len);
     void _free_tsfile_ts_record(TsRecord * record);
 
     # resulSet : query data from tsfile reader
@@ -163,6 +171,12 @@ cdef extern from "./tsfile_cwrapper.h":
                                  const char * table_name,
                                  const char** columns, uint32_t column_num,
                                  int64_t start_time, int64_t end_time, ErrorCode *err_code)
+
+    ResultSet tsfile_query_table_on_tree(TsFileReader reader,
+                         char** columns, uint32_t column_num,
+                         int64_t start_time, int64_t end_time,
+                         ErrorCode* err_code);
+
     ResultSet _tsfile_reader_query_device(TsFileReader reader,
                                           const char *device_name,
                                           char ** sensor_name, uint32_t sensor_num,
@@ -173,6 +187,8 @@ cdef extern from "./tsfile_cwrapper.h":
 
     TableSchema * tsfile_reader_get_all_table_schemas(TsFileReader reader,
                                                       uint32_t * size);
+    DeviceSchema * tsfile_reader_get_all_timeseries_schemas(TsFileReader reader,
+                                                            uint32_t * size);
 
     # resultSet : get data from resultSet
     bint tsfile_result_set_next(ResultSet result_set, ErrorCode * err_code);
@@ -189,3 +205,35 @@ cdef extern from "./tsfile_cwrapper.h":
 
     ResultSetMetaData tsfile_result_set_get_metadata(ResultSet result_set);
     void free_result_set_meta_data(ResultSetMetaData result_set_meta_data);
+
+
+
+cdef extern from "./common/config/config.h" namespace "common":
+    cdef cppclass ConfigValue:
+        uint32_t tsblock_mem_inc_step_size_
+        uint32_t tsblock_max_memory_
+        uint32_t page_writer_max_point_num_
+        uint32_t page_writer_max_memory_bytes_
+        uint32_t max_degree_of_index_node_
+        double tsfile_index_bloom_filter_error_percent_
+        uint8_t time_encoding_type_
+        uint8_t time_data_type_
+        uint8_t time_compress_type_
+        int32_t chunk_group_size_threshold_
+        int32_t record_count_for_next_mem_check_
+        bint encrypt_flag_
+        uint8_t boolean_encoding_type_;
+        uint8_t int32_encoding_type_;
+        uint8_t int64_encoding_type_;
+        uint8_t float_encoding_type_;
+        uint8_t double_encoding_type_;
+        uint8_t string_encoding_type_;
+        uint8_t default_compression_type_;
+
+cdef extern from "./common/global.h" namespace "common":
+    ConfigValue g_config_value_
+    int set_datatype_encoding(uint8_t data_type, uint8_t encoding)
+    int set_global_compression(uint8_t compression)
+    int set_global_time_data_type(uint8_t data_type);
+    int set_global_time_encoding(uint8_t encoding);
+    int set_global_time_compression(uint8_t compression);

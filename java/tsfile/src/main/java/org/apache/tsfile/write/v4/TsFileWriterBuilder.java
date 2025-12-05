@@ -20,7 +20,9 @@
 package org.apache.tsfile.write.v4;
 
 import org.apache.tsfile.annotations.TsFileApi;
+import org.apache.tsfile.external.commons.lang3.StringUtils;
 import org.apache.tsfile.file.metadata.TableSchema;
+import org.apache.tsfile.write.schema.IMeasurementSchema;
 
 import java.io.File;
 import java.io.IOException;
@@ -65,6 +67,14 @@ public class TsFileWriterBuilder {
     }
     if (this.memoryThresholdInByte <= 0) {
       throw new IllegalArgumentException("Memory threshold must be > 0 bytes.");
+    }
+    if (StringUtils.isBlank(this.tableSchema.getTableName())) {
+      throw new IllegalArgumentException("TableName must not be blank.");
+    }
+    for (IMeasurementSchema columnSchema : this.tableSchema.getColumnSchemas()) {
+      if (columnSchema == null || StringUtils.isBlank(columnSchema.getMeasurementName())) {
+        throw new IllegalArgumentException("Column name must not be blank.");
+      }
     }
   }
 }

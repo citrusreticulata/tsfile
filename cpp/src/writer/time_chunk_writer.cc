@@ -57,13 +57,15 @@ void TimeChunkWriter::reset() {
     }
     if (first_page_statistic_ != nullptr) {
         first_page_statistic_->reset();
+    } else {
+        first_page_statistic_ =
+            StatisticFactory::alloc_statistic(common::VECTOR);
     }
     time_page_writer_.reset();
     chunk_header_.reset();
     chunk_data_.reset();
     num_of_pages_ = 0;
 }
-
 
 void TimeChunkWriter::destroy() {
     if (num_of_pages_ == 1) {
@@ -144,9 +146,11 @@ void TimeChunkWriter::save_first_page_data(TimePageWriter &first_page_writer) {
     first_page_statistic_->deep_copy_from(first_page_writer.get_statistic());
 }
 
-int TimeChunkWriter::write_first_page_data(ByteStream &pages_data, bool with_statistic) {
+int TimeChunkWriter::write_first_page_data(ByteStream &pages_data,
+                                           bool with_statistic) {
     int ret = E_OK;
-    if (with_statistic && RET_FAIL(first_page_statistic_->serialize_to(pages_data))) {
+    if (with_statistic &&
+        RET_FAIL(first_page_statistic_->serialize_to(pages_data))) {
     } else if (RET_FAIL(
                    pages_data.write_buf(first_page_data_.compressed_buf_,
                                         first_page_data_.compressed_size_))) {
@@ -185,6 +189,11 @@ int64_t TimeChunkWriter::estimate_max_series_mem_size() {
            PageHeader::estimat_max_page_header_size_without_statistics() +
            get_typed_statistic_sizeof(
                time_page_writer_.get_statistic()->get_type());
+}
+
+bool TimeChunkWriter::hasData() {
+    return num_of_pages_ > 0 || (time_page_writer_.get_statistic() != nullptr &&
+                                 time_page_writer_.get_statistic()->count_ > 0);
 }
 
 }  // end namespace storage

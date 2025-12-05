@@ -21,6 +21,7 @@ package org.apache.tsfile.write.chunk;
 import org.apache.tsfile.common.constant.TsFileConstant;
 import org.apache.tsfile.encrypt.EncryptParameter;
 import org.apache.tsfile.encrypt.EncryptUtils;
+import org.apache.tsfile.enums.ColumnCategory;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.exception.write.WriteProcessException;
 import org.apache.tsfile.file.metadata.IDeviceID;
@@ -28,7 +29,6 @@ import org.apache.tsfile.utils.Binary;
 import org.apache.tsfile.utils.DateUtils;
 import org.apache.tsfile.write.UnSupportedDataTypeException;
 import org.apache.tsfile.write.record.Tablet;
-import org.apache.tsfile.write.record.Tablet.ColumnCategory;
 import org.apache.tsfile.write.record.datapoint.DataPoint;
 import org.apache.tsfile.write.schema.IMeasurementSchema;
 import org.apache.tsfile.write.writer.TsFileIOWriter;
@@ -60,7 +60,7 @@ public class NonAlignedChunkGroupWriterImpl implements IChunkGroupWriter {
 
   public NonAlignedChunkGroupWriterImpl(IDeviceID deviceId) {
     this.deviceId = deviceId;
-    this.encryptParam = EncryptUtils.encryptParam;
+    this.encryptParam = EncryptUtils.getEncryptParameter();
   }
 
   public NonAlignedChunkGroupWriterImpl(IDeviceID deviceId, EncryptParameter encryptParam) {
@@ -163,6 +163,7 @@ public class NonAlignedChunkGroupWriterImpl implements IChunkGroupWriter {
           case TEXT:
           case BLOB:
           case STRING:
+          case OBJECT:
             chunkWriters
                 .get(measurementId)
                 .write(time, ((Binary[]) tablet.getValues()[column])[row]);

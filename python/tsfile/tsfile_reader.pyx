@@ -19,19 +19,15 @@
 #cython: language_level=3
 
 import weakref
-import pandas as pd
-from pandas import DataFrame
-
-from .tsfile_cpp cimport *
-from .tsfile_py_cpp cimport *
-
-from libc.stdlib cimport free
-from libc.stdint cimport INT64_MIN, INT64_MAX
-cimport cython
-
 from typing import List
 
+import pandas as pd
+from libc.stdint cimport INT64_MIN, INT64_MAX
+from libc.stdlib cimport free
+
 from tsfile.schema import TSDataType as TSDataTypePy
+from .tsfile_cpp cimport *
+from .tsfile_py_cpp cimport *
 
 cdef class ResultSetPy:
     """
@@ -163,10 +159,11 @@ cdef class ResultSetPy:
         self.check_result_set_invalid()
         # Well when we check is null, id from 0, so there index -1.
         if tsfile_result_set_is_null_by_index(self.result, index):
+            print("get value by index and check is null")
             return None
         # data type in metadata is an array, id from 0.
         data_type = self.metadata.get_data_type(index)
-        if data_type == TSDataTypePy.INT32:
+        if data_type == TSDataTypePy.INT32 or data_type == TSDataTypePy.DATE:
             return tsfile_result_set_get_value_by_index_int32_t(self.result, index)
         elif data_type == TSDataTypePy.INT64:
             return tsfile_result_set_get_value_by_index_int64_t(self.result, index)
@@ -176,24 +173,24 @@ cdef class ResultSetPy:
             return tsfile_result_set_get_value_by_index_double(self.result, index)
         elif data_type == TSDataTypePy.BOOLEAN:
             return tsfile_result_set_get_value_by_index_bool(self.result, index)
-        elif data_type == TSDataTypePy.STRING:
+        elif data_type == TSDataTypePy.STRING or data_type == TSDataTypePy.TEXT or data_type == TSDataTypePy.BLOB:
             try:
                 string = tsfile_result_set_get_value_by_index_string(self.result, index)
-                py_str = string.decode('utf-8')
-                return py_str
+                if string == NULL:
+                    return None
+                return string.decode('utf-8')
             finally:
-                if string != NULL:
-                    free(string)
+                pass
 
     def get_value_by_name(self, column_name : str):
         """
         Get value by name from query result set.
         """
         self.check_result_set_invalid()
-        if tsfile_result_set_is_null_by_name_c(self.result, column_name):
+        if tsfile_result_set_is_null_by_name_c(self.result, column_name.lower()):
             return None
         # get index in metadata, metadata ind from 0.
-        ind = self.metadata.get_column_name_index(column_name, self.is_tree)
+        ind = self.metadata.get_column_name_index(column_name.lower(), self.is_tree)
         return self.get_value_by_index(ind)
 
     def get_metadata(self):
@@ -212,7 +209,7 @@ cdef class ResultSetPy:
             raise IndexError(
                 f"Column index {index} out of range (column count: {len(self.metadata.column_list)})"
             )
-        return tsfile_result_set_is_null_by_index(self.result, index - 1)
+        return tsfile_result_set_is_null_by_index(self.result, index)
 
     def is_null_by_name(self, name : str):
         """
@@ -220,7 +217,7 @@ cdef class ResultSetPy:
         """
         self.check_result_set_invalid()
         ind = self.metadata.get_column_name_index(name, self.is_tree)
-        return self.is_null_by_index(ind + 1)
+        return self.is_null_by_index(ind)
 
     def check_result_set_invalid(self):
         if not self.valid:
@@ -288,9 +285,26 @@ cdef class TsFileReaderPy:
         :return: query result handler.
         """
         cdef ResultSet result;
-        result = tsfile_reader_query_table_c(self.reader, table_name, column_names, start_time, end_time)
+        result = tsfile_reader_query_table_c(self.reader, table_name.lower(),
+                                             [column_name.lower() for column_name in column_names], start_time,
+                                             end_time)
         pyresult = ResultSetPy(self)
         pyresult.init_c(result, table_name)
+        self.activate_result_set_list.add(pyresult)
+        return pyresult
+    
+    def query_table_on_tree(self, column_names : List[str],
+                    start_time : int = INT64_MIN, end_time : int = INT64_MAX) -> ResultSetPy:
+        """
+        Execute a time range query on specified columns on tree structure.
+        :return: query result handler.
+        """
+        cdef ResultSet result;
+        result = tsfile_reader_query_table_on_tree_c(self.reader,
+                                             [column_name.lower() for column_name in column_names], start_time,
+                                             end_time)
+        pyresult = ResultSetPy(self, True)
+        pyresult.init_c(result, "root")
         self.activate_result_set_list.add(pyresult)
         return pyresult
 
@@ -326,6 +340,11 @@ cdef class TsFileReaderPy:
         """
         return get_all_table_schema(self.reader)
 
+    def get_all_timeseries_schemas(self):
+        """
+        Get all timeseries schemas
+        """
+        return get_all_timeseries_schema(self.reader)
 
     def close(self):
         """

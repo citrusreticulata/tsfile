@@ -19,9 +19,8 @@
 
 package org.apache.tsfile.file.metadata;
 
+import org.apache.tsfile.enums.ColumnCategory;
 import org.apache.tsfile.enums.TSDataType;
-import org.apache.tsfile.write.record.Tablet;
-import org.apache.tsfile.write.record.Tablet.ColumnCategory;
 
 public class ColumnSchema {
   private String columnName;
@@ -42,7 +41,7 @@ public class ColumnSchema {
     return dataType;
   }
 
-  public Tablet.ColumnCategory getColumnCategory() {
+  public ColumnCategory getColumnCategory() {
     return columnCategory;
   }
 }

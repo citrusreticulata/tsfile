@@ -57,11 +57,11 @@ public class AlignedChunkWriterImpl implements IChunkWriter {
 
   // TestOnly
   public AlignedChunkWriterImpl(VectorMeasurementSchema schema) {
-    this.encryptParam = EncryptUtils.encryptParam;
+    this.encryptParam = EncryptUtils.getEncryptParameter();
     timeChunkWriter =
         new TimeChunkWriter(
             schema.getMeasurementName(),
-            schema.getCompressor(),
+            schema.getTimeCompressor(),
             schema.getTimeTSEncoding(),
             schema.getTimeEncoder(),
             this.encryptParam);
@@ -76,7 +76,7 @@ public class AlignedChunkWriterImpl implements IChunkWriter {
       valueChunkWriterList.add(
           new ValueChunkWriter(
               valueMeasurementIdList.get(i),
-              schema.getCompressor(),
+              schema.getValueCompressor(i),
               valueTSDataTypeList.get(i),
               valueTSEncodingList.get(i),
               valueEncoderList.get(i),
@@ -92,7 +92,7 @@ public class AlignedChunkWriterImpl implements IChunkWriter {
     timeChunkWriter =
         new TimeChunkWriter(
             schema.getMeasurementName(),
-            schema.getCompressor(),
+            schema.getTimeCompressor(),
             schema.getTimeTSEncoding(),
             schema.getTimeEncoder(),
             this.encryptParam);
@@ -107,7 +107,7 @@ public class AlignedChunkWriterImpl implements IChunkWriter {
       valueChunkWriterList.add(
           new ValueChunkWriter(
               valueMeasurementIdList.get(i),
-              schema.getCompressor(),
+              schema.getValueCompressor(i),
               valueTSDataTypeList.get(i),
               valueTSEncodingList.get(i),
               valueEncoderList.get(i),
@@ -127,7 +127,7 @@ public class AlignedChunkWriterImpl implements IChunkWriter {
    */
   public AlignedChunkWriterImpl(
       IMeasurementSchema timeSchema, List<IMeasurementSchema> valueSchemaList) {
-    this.encryptParam = EncryptUtils.encryptParam;
+    this.encryptParam = EncryptUtils.getEncryptParameter();
     timeChunkWriter =
         new TimeChunkWriter(
             timeSchema.getMeasurementName(),
@@ -189,11 +189,12 @@ public class AlignedChunkWriterImpl implements IChunkWriter {
    * @param schemaList value schema list
    */
   public AlignedChunkWriterImpl(List<IMeasurementSchema> schemaList) {
-    this.encryptParam = EncryptUtils.encryptParam;
+    this.encryptParam = EncryptUtils.getEncryptParameter();
     TSEncoding timeEncoding =
         TSEncoding.valueOf(TSFileDescriptor.getInstance().getConfig().getTimeEncoder());
     TSDataType timeType = TSFileDescriptor.getInstance().getConfig().getTimeSeriesDataType();
-    CompressionType timeCompression = TSFileDescriptor.getInstance().getConfig().getCompressor();
+    CompressionType timeCompression =
+        TSFileDescriptor.getInstance().getConfig().getCompressor(TSDataType.INT64);
     timeChunkWriter =
         new TimeChunkWriter(
             "",
@@ -324,6 +325,7 @@ public class AlignedChunkWriterImpl implements IChunkWriter {
         case TEXT:
         case BLOB:
         case STRING:
+        case OBJECT:
           writer.write(
               time,
               point != null ? point.getBinary() : new Binary("".getBytes(StandardCharsets.UTF_8)),
@@ -368,6 +370,7 @@ public class AlignedChunkWriterImpl implements IChunkWriter {
         case TEXT:
         case BLOB:
         case STRING:
+        case OBJECT:
           chunkWriter.write(times, column.getBinaries(), column.isNull(), batchSize, arrayOffset);
           break;
         case DOUBLE:

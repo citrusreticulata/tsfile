@@ -24,6 +24,7 @@ import org.apache.tsfile.encoding.encoder.Encoder;
 import org.apache.tsfile.encoding.encoder.TSEncodingBuilder;
 import org.apache.tsfile.encrypt.EncryptParameter;
 import org.apache.tsfile.encrypt.EncryptUtils;
+import org.apache.tsfile.enums.ColumnCategory;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.exception.write.WriteProcessException;
 import org.apache.tsfile.file.metadata.IDeviceID;
@@ -33,7 +34,6 @@ import org.apache.tsfile.utils.Binary;
 import org.apache.tsfile.utils.DateUtils;
 import org.apache.tsfile.write.UnSupportedDataTypeException;
 import org.apache.tsfile.write.record.Tablet;
-import org.apache.tsfile.write.record.Tablet.ColumnCategory;
 import org.apache.tsfile.write.record.datapoint.DataPoint;
 import org.apache.tsfile.write.schema.IMeasurementSchema;
 import org.apache.tsfile.write.writer.TsFileIOWriter;
@@ -74,7 +74,7 @@ public class AlignedChunkGroupWriterImpl implements IChunkGroupWriter {
         TSEncoding.valueOf(TSFileDescriptor.getInstance().getConfig().getTimeEncoder());
     TSDataType timeType = TSFileDescriptor.getInstance().getConfig().getTimeSeriesDataType();
     Encoder encoder = TSEncodingBuilder.getEncodingBuilder(tsEncoding).getEncoder(timeType);
-    this.encryprParam = EncryptUtils.encryptParam;
+    this.encryprParam = EncryptUtils.getEncryptParameter();
     timeChunkWriter =
         new TimeChunkWriter(
             timeMeasurementId, compressionType, tsEncoding, encoder, this.encryprParam);
@@ -113,7 +113,8 @@ public class AlignedChunkGroupWriterImpl implements IChunkGroupWriter {
               measurementSchema.getCompressor(),
               measurementSchema.getType(),
               measurementSchema.getEncodingType(),
-              measurementSchema.getValueEncoder());
+              measurementSchema.getValueEncoder(),
+              this.encryprParam);
       valueChunkWriterMap.put(measurementName, valueChunkWriter);
       tryToAddEmptyPageAndData(valueChunkWriter);
     }
@@ -134,7 +135,8 @@ public class AlignedChunkGroupWriterImpl implements IChunkGroupWriter {
                 schema.getCompressor(),
                 schema.getType(),
                 schema.getEncodingType(),
-                schema.getValueEncoder());
+                schema.getValueEncoder(),
+                this.encryprParam);
         valueChunkWriterMap.put(measurementName, valueChunkWriter);
         tryToAddEmptyPageAndData(valueChunkWriter);
       }
@@ -165,6 +167,9 @@ public class AlignedChunkGroupWriterImpl implements IChunkGroupWriter {
               ? point.getMeasurementId().toLowerCase()
               : point.getMeasurementId();
       ValueChunkWriter valueChunkWriter = valueChunkWriterMap.get(measurementId);
+      if (valueChunkWriter == null) {
+        valueChunkWriter = tryToAddSeriesWriterInternal(point.getMeasurementSchema());
+      }
       switch (point.getType()) {
         case BOOLEAN:
           valueChunkWriter.write(time, (boolean) point.getValue(), isNull);
@@ -186,6 +191,7 @@ public class AlignedChunkGroupWriterImpl implements IChunkGroupWriter {
         case TEXT:
         case BLOB:
         case STRING:
+        case OBJECT:
           valueChunkWriter.write(time, (Binary) point.getValue(), isNull);
           break;
         default:
@@ -278,6 +284,7 @@ public class AlignedChunkGroupWriterImpl implements IChunkGroupWriter {
           case TEXT:
           case BLOB:
           case STRING:
+          case OBJECT:
             valueChunkWriter.write(time, ((Binary[]) tablet.getValues()[columnIndex])[row], isNull);
             break;
           default:
@@ -371,6 +378,7 @@ public class AlignedChunkGroupWriterImpl implements IChunkGroupWriter {
         case TEXT:
         case BLOB:
         case STRING:
+        case OBJECT:
           valueChunkWriter.write(-1, null, true);
           break;
         default:

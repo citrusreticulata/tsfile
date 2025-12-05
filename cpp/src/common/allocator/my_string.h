@@ -35,11 +35,12 @@ struct String {
 
     String() : buf_(nullptr), len_(0) {}
     String(char *buf, uint32_t len) : buf_(buf), len_(len) {}
-    String(const std::string& str, common::PageArena& pa) : buf_(nullptr), len_(0) {
+    String(const std::string &str, common::PageArena &pa)
+        : buf_(nullptr), len_(0) {
         dup_from(str, pa);
     }
-    String(const std::string& str) {
-        buf_ = (char*)str.c_str();
+    String(const std::string &str) {
+        buf_ = (char *)str.c_str();
         len_ = str.size();
     }
     FORCE_INLINE bool is_null() const { return buf_ == nullptr && len_ == 0; }
@@ -67,6 +68,7 @@ struct String {
     FORCE_INLINE int dup_from(const String &str, common::PageArena &pa) {
         len_ = str.len_;
         if (UNLIKELY(len_ == 0)) {
+            buf_ = nullptr;
             return common::E_OK;
         }
         buf_ = pa.alloc(len_);
@@ -76,6 +78,21 @@ struct String {
         memcpy(buf_, str.buf_, len_);
         return common::E_OK;
     }
+
+    FORCE_INLINE int dup_from(const char *str, uint32_t len,
+                              common::PageArena &pa) {
+        len_ = len;
+        if (UNLIKELY(len_ == 0)) {
+            return common::E_OK;
+        }
+        buf_ = pa.alloc(len_);
+        if (IS_NULL(buf_)) {
+            return common::E_OOM;
+        }
+        memcpy(buf_, str, len_);
+        return common::E_OK;
+    }
+
     FORCE_INLINE int build_from(const String &s1, const String &s2,
                                 common::PageArena &pa) {
         len_ = s1.len_ + s2.len_;
@@ -123,8 +140,14 @@ struct String {
     // return < 0, if this < that
     // return > 0, if this > that
     FORCE_INLINE int compare(const String &that) const {
-        if (len_ == 0 || that.len_ == 0) {
+        if (len_ == 0 && that.len_ == 0) {
             return 0;
+        }
+        if (len_ == 0) {
+            return -1;
+        }
+        if (that.len_ == 0) {
+            return 1;
         }
         uint32_t min_len = std::min(len_, that.len_);
         int cmp_res = memcmp(buf_, that.buf_, min_len);

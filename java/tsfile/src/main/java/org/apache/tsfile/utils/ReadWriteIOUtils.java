@@ -609,8 +609,10 @@ public class ReadWriteIOUtils {
   /** Read string from inputStream. */
   public static String readString(InputStream inputStream) throws IOException {
     int strLength = readInt(inputStream);
-    if (strLength <= 0) {
+    if (strLength < 0) {
       return null;
+    } else if (strLength == 0) {
+      return "";
     }
     byte[] bytes = new byte[strLength];
     int readLen = inputStream.read(bytes, 0, strLength);
@@ -995,6 +997,18 @@ public class ReadWriteIOUtils {
     return set;
   }
 
+  public static Set<String> readStringSet(ByteBuffer buffer) {
+    int size = readInt(buffer);
+    if (size <= 0) {
+      return Collections.emptySet();
+    }
+    Set<String> set = new HashSet<>();
+    for (int i = 0; i < size; i++) {
+      set.add(readString(buffer));
+    }
+    return set;
+  }
+
   // read object set with self define length
   public static <T> Set<T> readObjectSet(ByteBuffer buffer) {
     int size = readInt(buffer);
@@ -1080,6 +1094,16 @@ public class ReadWriteIOUtils {
     }
   }
 
+  public static void writeStringSet(Set<String> set, DataOutputStream outputStream)
+      throws IOException {
+    write(set.contains(null) ? set.size() - 1 : set.size(), outputStream);
+    for (String e : set) {
+      if (e != null) {
+        write(e, outputStream);
+      }
+    }
+  }
+
   public static CompressionType readCompressionType(InputStream inputStream) throws IOException {
     byte n = readByte(inputStream);
     return CompressionType.deserialize(n);
@@ -1143,6 +1167,7 @@ public class ReadWriteIOUtils {
     BINARY,
     BOOLEAN,
     STRING,
+    TAG,
     NULL
   }
 

@@ -20,11 +20,12 @@
 package org.apache.tsfile.file.metadata;
 
 import org.apache.tsfile.annotations.TsFileApi;
+import org.apache.tsfile.common.constant.TsFileConstant;
 import org.apache.tsfile.compatibility.DeserializeConfig;
+import org.apache.tsfile.enums.ColumnCategory;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.utils.ReadWriteForEncodingUtils;
 import org.apache.tsfile.utils.ReadWriteIOUtils;
-import org.apache.tsfile.write.record.Tablet.ColumnCategory;
 import org.apache.tsfile.write.schema.IMeasurementSchema;
 import org.apache.tsfile.write.schema.MeasurementSchema;
 
@@ -52,6 +53,7 @@ public class TableSchema {
   private Map<String, Integer> columnPosIndex;
   // columnName -> pos in all id columns
   private Map<String, Integer> idColumnOrder;
+  private int tagColumnCnt = -1;
 
   public TableSchema(String tableName) {
     this.tableName = tableName.toLowerCase();
@@ -97,6 +99,22 @@ public class TableSchema {
               columnSchema.getProps()));
       columnPosIndex.put(measurementName, i);
     }
+    if (measurementSchemas.size() != columnPosIndex.size()) {
+      throw new IllegalArgumentException(
+          "Each column name in the table should be unique(case insensitive).");
+    }
+    this.columnCategories = columnCategories;
+    this.updatable = false;
+  }
+
+  public TableSchema(
+      String tableName,
+      List<IMeasurementSchema> columnSchemas,
+      List<ColumnCategory> columnCategories,
+      Map<String, Integer> columnPosIndex) {
+    this.tableName = tableName.toLowerCase();
+    this.measurementSchemas = columnSchemas;
+    this.columnPosIndex = columnPosIndex;
     if (measurementSchemas.size() != columnPosIndex.size()) {
       throw new IllegalArgumentException(
           "Each column name in the table should be unique(case insensitive).");
@@ -227,6 +245,9 @@ public class TableSchema {
     }
 
     for (ChunkMetadata chunkMetadata : chunkGroupMetadata.getChunkMetadataList()) {
+      if (TsFileConstant.TIME_COLUMN_ID.equals(chunkMetadata.getMeasurementUid())) {
+        continue;
+      }
       int columnIndex = findColumnIndex(chunkMetadata.getMeasurementUid());
       // if the measurement is not found in the column list, add it
       if (columnIndex == -1) {
@@ -326,5 +347,13 @@ public class TableSchema {
   @Override
   public int hashCode() {
     return Objects.hash(tableName, measurementSchemas, columnCategories);
+  }
+
+  public int getTagColumnCnt() {
+    if (tagColumnCnt != -1) {
+      return tagColumnCnt;
+    }
+    tagColumnCnt = (int) columnCategories.stream().filter(c -> c == ColumnCategory.TAG).count();
+    return tagColumnCnt;
   }
 }

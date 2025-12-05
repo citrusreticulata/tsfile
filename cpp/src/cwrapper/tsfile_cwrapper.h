@@ -35,6 +35,8 @@ typedef enum {
     TS_DATATYPE_DOUBLE = 4,
     TS_DATATYPE_TEXT = 5,
     TS_DATATYPE_VECTOR = 6,
+    TS_DATATYPE_DATE = 9,
+    TS_DATATYPE_BLOB = 10,
     TS_DATATYPE_STRING = 11,
     TS_DATATYPE_NULL_TYPE = 254,
     TS_DATATYPE_INVALID = 255
@@ -52,6 +54,7 @@ typedef enum {
     TS_ENCODING_GORILLA = 8,
     TS_ENCODING_ZIGZAG = 9,
     TS_ENCODING_FREQ = 10,
+    TS_ENCODING_SPRINTZ = 12,
     TS_ENCODING_INVALID = 255
 } TSEncoding;
 
@@ -118,6 +121,79 @@ typedef void* ResultSet;
 typedef int32_t ERRNO;
 typedef int64_t Timestamp;
 
+/**
+ * @brief Get the encoding type for global time column
+ *
+ * @return uint8_t Time encoding type enum value (cast to uint8_t)
+ */
+uint8_t get_global_time_encoding();
+
+/**
+ * @brief Get the compression type for global time column
+ *
+ * @return uint8_t Time compression type enum value (cast to uint8_t)
+ */
+uint8_t get_global_time_compression();
+
+/**
+ * @brief Get the encoding type for specified data type
+ *
+ * @param data_type The data type to query encoding for
+ * @return uint8_t Encoding type enum value (cast to uint8_t)
+ */
+uint8_t get_datatype_encoding(uint8_t data_type);
+
+/**
+ * @brief Get the global default compression type
+ *
+ * @return uint8_t Compression type enum value (cast to uint8_t)
+ */
+uint8_t get_global_compression();
+
+/**
+ * @brief Sets the global time column encoding method
+ *
+ * Validates and sets the encoding type for time series timestamps.
+ * Supported encodings: TS_2DIFF, PLAIN, GORILLA, ZIGZAG, RLE, SPRINTZ
+ *
+ * @param encoding The encoding type to set (as uint8_t)
+ * @return int E_OK on success, E_NOT_SUPPORT for invalid encoding
+ */
+int set_global_time_encoding(uint8_t encoding);
+
+/**
+ * @brief Sets the global time column compression method
+ *
+ * Validates and sets the compression type for time series timestamps.
+ * Supported compressions: UNCOMPRESSED, SNAPPY, GZIP, LZO, LZ4
+ *
+ * @param compression The compression type to set (as uint8_t)
+ * @return int E_OK on success, E_NOT_SUPPORT for invalid compression
+ */
+int set_global_time_compression(uint8_t compression);
+
+/**
+ * @brief Set encoding type for specific data type
+ * @param data_type The data type to configure
+ * @param encoding The encoding type to set
+ * @return E_OK if success, E_NOT_SUPPORT if encoding is not supported for the
+ * data type
+ * @note Supported encodings per data type:
+ *        - BOOLEAN: PLAIN only
+ *        - INT32/INT64: PLAIN, TS_2DIFF, GORILLA, ZIGZAG, RLE, SPRINTZ
+ *        - FLOAT/DOUBLE: PLAIN, TS_2DIFF, GORILLA, SPRINTZ
+ *        - STRING: PLAIN, DICTIONARY
+ */
+int set_datatype_encoding(uint8_t data_type, uint8_t encoding);
+
+/**
+ * @brief Set the global default compression type
+ * @param compression Compression type to set
+ * @return E_OK if success, E_NOT_SUPPORT if compression is not supported
+ * @note Supported compressions: UNCOMPRESSED, SNAPPY, GZIP, LZO, LZ4
+ */
+int set_global_compression(uint8_t compression);
+
 /*--------------------------TsFile Reader and Writer------------------------ */
 
 /**
@@ -155,8 +231,8 @@ TsFileWriter tsfile_writer_new(WriteFile file, TableSchema* schema,
  * @param file     Target file where the table data will be written.
  * @param schema       Table schema definition.
  *                     - Ownership: Should be free it by Caller.
- * @param memory_threshold used to limit the memory size
- *                      of objects. If set to 0, no memory limit is enforced.
+ * @param memory_threshold  When the size of written data exceeds
+ * this value, the data will be automatically flushed to the disk.
  * @param err_code     [out] E_OK(0), or check error code in errno_define_c.h.
  *
  * @return TsFileWriter Valid handle on success, NULL on failure.
@@ -354,6 +430,10 @@ ResultSet tsfile_query_table(TsFileReader reader, const char* table_name,
                              char** columns, uint32_t column_num,
                              Timestamp start_time, Timestamp end_time,
                              ERRNO* err_code);
+
+ResultSet tsfile_query_table_on_tree(TsFileReader reader, char** columns,
+                                     uint32_t column_num, Timestamp start_time,
+                                     Timestamp end_time, ERRNO* err_code);
 // ResultSet tsfile_reader_query_device(TsFileReader reader,
 //                                      const char* device_name,
 //                                      char** sensor_name, uint32_t sensor_num,
@@ -498,6 +578,15 @@ TableSchema tsfile_reader_get_table_schema(TsFileReader reader,
 TableSchema* tsfile_reader_get_all_table_schemas(TsFileReader reader,
                                                  uint32_t* size);
 
+/**
+ * @brief Gets all timeseries schema in the tsfile.
+ *
+ * @return DeviceSchema list, contains timeseries info.
+ * @note Caller should call free_device_schema and free to free the ptr.
+ */
+DeviceSchema* tsfile_reader_get_all_timeseries_schemas(TsFileReader reader,
+                                                       uint32_t* size);
+
 // Close and free resource.
 void free_tablet(Tablet* tablet);
 void free_tsfile_result_set(ResultSet* result_set);
@@ -514,7 +603,8 @@ void free_write_file(WriteFile* write_file);
  *  Avoid use: No compatibility/existence guarantees. */
 
 // Create a tsfile writer.
-TsFileWriter _tsfile_writer_new(const char* pathname, ERRNO* err_code);
+TsFileWriter _tsfile_writer_new(const char* pathname, uint64_t memory_threshold,
+                                ERRNO* err_code);
 
 // Create a tablet with name, data_type and max_rows.
 Tablet _tablet_new_with_target_name(const char* device_id,
@@ -549,6 +639,10 @@ INSERT_DATA_INTO_TS_RECORD_BY_NAME(bool);
 INSERT_DATA_INTO_TS_RECORD_BY_NAME(float);
 INSERT_DATA_INTO_TS_RECORD_BY_NAME(double);
 
+ERRNO _insert_data_into_ts_record_by_name_string_with_len(
+    TsRecord data, const char* measurement_name, const char* value,
+    const uint32_t value_len);
+
 // Write a tablet into a device.
 ERRNO _tsfile_writer_write_tablet(TsFileWriter writer, Tablet tablet);
 
@@ -560,6 +654,9 @@ ERRNO _tsfile_writer_write_ts_record(TsFileWriter writer, TsRecord record);
 
 // Close a TsFile writer, automatically flush data.
 ERRNO _tsfile_writer_close(TsFileWriter writer);
+
+// Flush Chunk into tsfile from current tsFileWriter
+ERRNO _tsfile_writer_flush(TsFileWriter writer);
 
 // Queries time-series data for a specific device within a given time range.
 ResultSet _tsfile_reader_query_device(TsFileReader reader,
